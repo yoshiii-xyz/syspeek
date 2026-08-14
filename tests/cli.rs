@@ -63,6 +63,25 @@ fn process_limit_is_respected() {
 }
 
 #[test]
+fn process_sorting_is_descending_for_memory() {
+    let output = syspeek()
+        .args(["processes", "--limit", "10", "--sort", "memory", "--json"])
+        .output()
+        .expect("command should run");
+    assert!(output.status.success());
+    let document: Value = serde_json::from_slice(&output.stdout).expect("stdout should be JSON");
+    let processes =
+        document["processes"]["processes"].as_array().expect("process list should be an array");
+    for pair in processes.windows(2) {
+        let current =
+            pair[0]["residentMemoryBytes"].as_u64().expect("resident memory should be numeric");
+        let next =
+            pair[1]["residentMemoryBytes"].as_u64().expect("resident memory should be numeric");
+        assert!(current >= next);
+    }
+}
+
+#[test]
 fn invalid_arguments_use_usage_exit_code() {
     syspeek()
         .args(["--interval", "10ms"])

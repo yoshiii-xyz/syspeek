@@ -30,6 +30,7 @@ pub fn render_human(snapshot: &Snapshot, options: HumanRenderOptions) -> String 
         ascii: options.ascii,
     };
     let mut output = String::new();
+    let terminal_width = terminal_width();
     writeln!(
         output,
         "{}",
@@ -48,13 +49,13 @@ pub fn render_human(snapshot: &Snapshot, options: HumanRenderOptions) -> String 
         render_memory(&mut output, &theme, memory);
     }
     if let Some(storage) = &snapshot.storage {
-        render_storage(&mut output, &theme, storage);
+        render_storage(&mut output, &theme, storage, terminal_width);
     }
     if let Some(network) = &snapshot.network {
-        render_network(&mut output, &theme, network);
+        render_network(&mut output, &theme, network, terminal_width);
     }
     if let Some(processes) = &snapshot.processes {
-        render_processes(&mut output, &theme, processes, options.process_sort);
+        render_processes(&mut output, &theme, processes, options.process_sort, terminal_width);
     }
     if !snapshot.warnings.is_empty() {
         section(&mut output, &theme, "WARNINGS");
@@ -150,7 +151,7 @@ fn render_memory(output: &mut String, theme: &Theme, memory: &MemoryInfo) {
     }
 }
 
-fn render_storage(output: &mut String, theme: &Theme, storage: &StorageInfo) {
+fn render_storage(output: &mut String, theme: &Theme, storage: &StorageInfo, width: usize) {
     section(output, theme, "STORAGE");
     if storage.volumes.is_empty() {
         pair(output, "Volumes", "unavailable".to_string());
@@ -161,7 +162,13 @@ fn render_storage(output: &mut String, theme: &Theme, storage: &StorageInfo) {
         writeln!(
             output,
             "  {}  {}",
-            theme.paint(format!("Mount {}", truncate(&volume.mount_point, 24)), "1"),
+            theme.paint(
+                format!(
+                    "Mount {}",
+                    truncate(&volume.mount_point, width.saturating_sub(42).max(16))
+                ),
+                "1",
+            ),
             theme.paint(format!("({})", truncate(filesystem, 10)), "2")
         )
         .expect("writing to a String cannot fail");
@@ -189,7 +196,7 @@ fn render_storage(output: &mut String, theme: &Theme, storage: &StorageInfo) {
     }
 }
 
-fn render_network(output: &mut String, theme: &Theme, network: &NetworkInfo) {
+fn render_network(output: &mut String, theme: &Theme, network: &NetworkInfo, width: usize) {
     section(output, theme, "NETWORK");
     if network.interfaces.is_empty() {
         pair(output, "Interfaces", "unavailable".to_string());
@@ -209,7 +216,7 @@ fn render_network(output: &mut String, theme: &Theme, network: &NetworkInfo) {
         writeln!(
             output,
             "  {}  {}  MTU {}",
-            theme.paint(truncate(&interface.name, 24), "1"),
+            theme.paint(truncate(&interface.name, width.saturating_sub(28).max(12)), "1"),
             truncate(interface.state.as_deref().unwrap_or("unknown"), 12),
             interface.mtu.map(|mtu| mtu.to_string()).unwrap_or_else(|| "n/a".to_string())
         )
@@ -223,8 +230,12 @@ fn render_network(output: &mut String, theme: &Theme, network: &NetworkInfo) {
         writeln!(output, "    {counters}").expect("writing to a String cannot fail");
         writeln!(output, "    MAC {}", interface.mac_address.as_deref().unwrap_or("unavailable"),)
             .expect("writing to a String cannot fail");
-        writeln!(output, "    Addresses: {}", truncate(&addresses, 48))
-            .expect("writing to a String cannot fail");
+        writeln!(
+            output,
+            "    Addresses: {}",
+            truncate(&addresses, width.saturating_sub(15).max(16))
+        )
+        .expect("writing to a String cannot fail");
     }
 }
 
@@ -233,6 +244,7 @@ fn render_processes(
     theme: &Theme,
     processes: &ProcessInfo,
     sort: ProcessSort,
+    width: usize,
 ) {
     section(output, theme, "PROCESSES");
     writeln!(
@@ -267,7 +279,7 @@ fn render_processes(
                 .unwrap_or_else(|| "n/a".to_string()),
             process.resident_memory_bytes.map(format_bytes).unwrap_or_else(|| "n/a".to_string()),
             truncate(process.status.as_deref().unwrap_or("unknown"), 12),
-            truncate(&process.name, 36),
+            truncate(&process.name, width.saturating_sub(43).max(12)),
         )
         .expect("writing to a String cannot fail");
     }
@@ -352,6 +364,10 @@ fn truncate(value: &str, max_chars: usize) -> String {
     }
     let shortened: String = value.chars().take(max_chars.saturating_sub(3)).collect();
     format!("{shortened}...")
+}
+
+fn terminal_width() -> usize {
+    crossterm::terminal::size().map(|(width, _)| width as usize).unwrap_or(80).max(40)
 }
 
 struct Theme {
