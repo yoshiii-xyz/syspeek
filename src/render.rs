@@ -21,6 +21,14 @@ pub fn render_json(snapshot: &Snapshot) -> serde_json::Result<String> {
 }
 
 pub fn render_human(snapshot: &Snapshot, options: HumanRenderOptions) -> String {
+    render_human_at_width(snapshot, options, terminal_width())
+}
+
+fn render_human_at_width(
+    snapshot: &Snapshot,
+    options: HumanRenderOptions,
+    terminal_width: usize,
+) -> String {
     let theme = Theme {
         color: match options.color {
             ColorChoice::Auto => options.stdout_is_terminal,
@@ -30,7 +38,6 @@ pub fn render_human(snapshot: &Snapshot, options: HumanRenderOptions) -> String 
         ascii: options.ascii,
     };
     let mut output = String::new();
-    let terminal_width = terminal_width();
     writeln!(
         output,
         "{}",
@@ -60,8 +67,13 @@ pub fn render_human(snapshot: &Snapshot, options: HumanRenderOptions) -> String 
     if !snapshot.warnings.is_empty() {
         section(&mut output, &theme, "WARNINGS");
         for warning in &snapshot.warnings {
-            writeln!(output, "  [{}] {}", theme.paint(&warning.section, "33"), warning.message)
-                .expect("writing to a String cannot fail");
+            writeln!(
+                output,
+                "  [{}] {}",
+                theme.paint(&warning.section, "33"),
+                sanitize_terminal(&warning.message)
+            )
+            .expect("writing to a String cannot fail");
         }
     }
     output
@@ -228,8 +240,12 @@ fn render_network(output: &mut String, theme: &Theme, network: &NetworkInfo, wid
             _ => "Counters unavailable".to_string(),
         };
         writeln!(output, "    {counters}").expect("writing to a String cannot fail");
-        writeln!(output, "    MAC {}", interface.mac_address.as_deref().unwrap_or("unavailable"),)
-            .expect("writing to a String cannot fail");
+        writeln!(
+            output,
+            "    MAC {}",
+            sanitize_terminal(interface.mac_address.as_deref().unwrap_or("unavailable")),
+        )
+        .expect("writing to a String cannot fail");
         writeln!(
             output,
             "    Addresses: {}",
@@ -247,17 +263,22 @@ fn render_processes(
     width: usize,
 ) {
     section(output, theme, "PROCESSES");
-    writeln!(
-        output,
-        "  Showing {} of {} processes, sorted by {}.",
+    let summary = format!(
+        "Showing {} of {} processes, sorted by {}.",
         processes.processes.len(),
         processes.total_count,
         sort_label(sort)
-    )
-    .expect("writing to a String cannot fail");
+    );
+    writeln!(output, "  {}", truncate(&summary, width.saturating_sub(2).max(1)))
+        .expect("writing to a String cannot fail");
     if processes.processes.is_empty() {
         return;
     }
+    if width < 58 {
+        render_processes_compact(output, theme, processes, width);
+        return;
+    }
+    let name_width = width.saturating_sub(46).max(3);
     writeln!(
         output,
         "  {:>7} {:>8} {:>12} {:<12}  {}",
@@ -279,9 +300,42 @@ fn render_processes(
                 .unwrap_or_else(|| "n/a".to_string()),
             process.resident_memory_bytes.map(format_bytes).unwrap_or_else(|| "n/a".to_string()),
             truncate(process.status.as_deref().unwrap_or("unknown"), 12),
-            truncate(&process.name, width.saturating_sub(43).max(12)),
+            truncate(&process.name, name_width),
         )
         .expect("writing to a String cannot fail");
+    }
+}
+
+fn render_processes_compact(
+    output: &mut String,
+    theme: &Theme,
+    processes: &ProcessInfo,
+    width: usize,
+) {
+    writeln!(
+        output,
+        "  {:>7} {:>8} {:>12}",
+        theme.paint(format!("{:>7}", "PID"), "2"),
+        theme.paint(format!("{:>8}", "CPU"), "2"),
+        theme.paint(format!("{:>12}", "RESIDENT"), "2")
+    )
+    .expect("writing to a String cannot fail");
+    for process in &processes.processes {
+        writeln!(
+            output,
+            "  {:>7} {:>8} {:>12}",
+            process.pid,
+            process
+                .cpu_percent
+                .map(|value| format!("{value:.1}%"))
+                .unwrap_or_else(|| "n/a".to_string()),
+            process.resident_memory_bytes.map(format_bytes).unwrap_or_else(|| "n/a".to_string()),
+        )
+        .expect("writing to a String cannot fail");
+        let details =
+            format!("{} [{}]", process.name, process.status.as_deref().unwrap_or("unknown"));
+        writeln!(output, "    {}", truncate(&details, width.saturating_sub(4).max(8)))
+            .expect("writing to a String cannot fail");
     }
 }
 
@@ -298,7 +352,8 @@ fn section(output: &mut String, theme: &Theme, title: &str) {
 }
 
 fn pair(output: &mut String, label: &str, value: String) {
-    writeln!(output, "  {label:<18} {value}").expect("writing to a String cannot fail");
+    writeln!(output, "  {label:<18} {}", sanitize_terminal(&value))
+        .expect("writing to a String cannot fail");
 }
 
 fn optional<T: Display>(value: Option<&T>) -> String {
@@ -359,11 +414,16 @@ fn sort_label(sort: ProcessSort) -> &'static str {
 }
 
 fn truncate(value: &str, max_chars: usize) -> String {
+    let value = sanitize_terminal(value);
     if value.chars().count() <= max_chars {
-        return value.to_string();
+        return value;
     }
     let shortened: String = value.chars().take(max_chars.saturating_sub(3)).collect();
     format!("{shortened}...")
+}
+
+fn sanitize_terminal(value: &str) -> String {
+    value.chars().map(|character| if character.is_control() { '?' } else { character }).collect()
 }
 
 fn terminal_width() -> usize {
@@ -377,10 +437,11 @@ struct Theme {
 
 impl Theme {
     fn paint(&self, value: impl AsRef<str>, code: &str) -> String {
-        if self.color {
-            format!("\x1b[{code}m{}\x1b[0m", value.as_ref())
-        } else {
-            value.as_ref().to_string()
-        }
+        let value = sanitize_terminal(value.as_ref());
+        if self.color { format!("\x1b[{code}m{value}\x1b[0m") } else { value }
     }
 }
+
+#[cfg(test)]
+#[path = "render_tests.rs"]
+mod tests;

@@ -41,3 +41,6 @@ jobs:
 
       - name: Build release binary
         run: cargo build --release --locked
+
+      - name: Verify package contents
+        run: cargo package --locked

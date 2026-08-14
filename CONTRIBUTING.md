@@ -10,9 +10,9 @@ root:
 
 ~~~console
 cargo fmt --all
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets
-cargo build --release
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo test --all-targets --locked
+cargo build --release --locked
 ~~~
 
 Exercise the binary directly while developing:

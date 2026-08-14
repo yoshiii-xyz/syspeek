@@ -90,3 +90,59 @@ fn invalid_arguments_use_usage_exit_code() {
         .code(2)
         .stderr(predicate::str::contains("watch interval"));
 }
+
+#[test]
+fn watch_json_combination_is_rejected_before_terminal_checks() {
+    syspeek()
+        .args(["--watch", "--json"])
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("cannot be combined"));
+}
+
+#[test]
+fn zero_process_limit_is_rejected() {
+    syspeek()
+        .args(["processes", "--limit", "0"])
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("greater than zero"));
+}
+
+#[test]
+fn watch_mode_requires_interactive_stdout() {
+    syspeek()
+        .arg("--watch")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("interactive terminal"));
+}
+
+#[test]
+fn focused_commands_select_only_the_requested_sections() {
+    let cases = [
+        (&["system", "--json"][..], "system", "system"),
+        (&["memory", "--json"][..], "memory", "memory"),
+        (&["disk", "--json"][..], "disk", "storage"),
+        (&["network", "--json"][..], "network", "network"),
+        (&["processes", "--limit", "1", "--json"][..], "processes", "processes"),
+    ];
+    let sections = ["cpu", "memory", "storage", "network", "processes"];
+
+    for (args, expected_scope, selected_section) in cases {
+        let output = syspeek().args(args).output().expect("command should run");
+        assert!(output.status.success(), "command failed for {args:?}");
+        let document: Value =
+            serde_json::from_slice(&output.stdout).expect("stdout should be JSON");
+        assert_eq!(document["scope"], expected_scope);
+        assert!(document[selected_section].is_object());
+        for section in sections {
+            if section != selected_section {
+                assert!(document[section].is_null(), "section {section} was collected");
+            }
+        }
+    }
+}

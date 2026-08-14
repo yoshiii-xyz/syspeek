@@ -17,6 +17,9 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/joshiii-xyz/syspeek/actions/workflows/ci.yml">
+    <img src="https://github.com/joshiii-xyz/syspeek/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status" />
+  </a>
   <a href="https://www.rust-lang.org/">
     <img src="https://img.shields.io/badge/rust-1.95%2B-orange.svg" alt="Rust 1.95 or newer" />
   </a>
@@ -57,14 +60,14 @@ required.
 Install a checkout as a local command:
 
 ~~~console
-cargo install --path .
+cargo install --path . --locked
 syspeek --help
 ~~~
 
 Build an optimized binary without installing it:
 
 ~~~console
-cargo build --release
+cargo build --release --locked
 target/release/syspeek
 ~~~
 
@@ -310,7 +313,7 @@ between refreshes, so subsequent utilization values use the elapsed watch interv
 The benchmark suite is intentionally observational. It does not fail on absolute timing:
 
 ~~~console
-cargo bench --bench snapshot
+cargo bench --bench snapshot --locked
 ~~~
 
 Run it on representative hosts if a change affects process enumeration, storage discovery, or
@@ -337,9 +340,9 @@ The project needs Rust 1.95 or newer. From a checkout:
 
 ~~~console
 cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets
-cargo build --release
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo test --all-targets --locked
+cargo build --release --locked
 ~~~
 
 Use <code>cargo run -- --help</code> to exercise the CLI from a checkout. See

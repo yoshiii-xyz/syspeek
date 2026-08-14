@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
 description = "Fast, readable, cross-platform system inspection for developer machines"
+readme = "README.md"
 license = "MIT"
 repository = "https://github.com/joshiii-xyz/syspeek"
 keywords = ["system-information", "system-monitor", "diagnostics", "cli", "cross-platform"]

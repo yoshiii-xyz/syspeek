@@ -126,7 +126,8 @@ fn parse_duration(input: &str) -> Result<Duration, String> {
         "m" => value * 60.0,
         _ => return Err(format!("unknown duration unit in {input:?}; use ms, s, or m")),
     };
-    let duration = Duration::from_secs_f64(seconds);
+    let duration = Duration::try_from_secs_f64(seconds)
+        .map_err(|_| format!("duration {input:?} is too large"))?;
     if duration < Duration::from_millis(200) {
         return Err("watch interval must be at least 200ms".to_string());
     }

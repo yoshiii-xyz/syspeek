@@ -219,7 +219,12 @@ impl Collector {
                 }
             })
             .collect::<Vec<_>>();
-        volumes.sort_by(|left, right| left.mount_point.cmp(&right.mount_point));
+        volumes.sort_by(|left, right| {
+            left.mount_point
+                .cmp(&right.mount_point)
+                .then_with(|| left.device.cmp(&right.device))
+                .then_with(|| left.filesystem.cmp(&right.filesystem))
+        });
         Some(StorageInfo { volumes })
     }
 
@@ -228,22 +233,31 @@ impl Collector {
         let mut interfaces = networks
             .list()
             .iter()
-            .map(|(name, network)| NetworkInterface {
-                name: name.clone(),
-                state: Some(network.operational_state().to_string()),
-                mtu: non_zero(network.mtu()),
-                mac_address: (!network.mac_address().is_unspecified())
-                    .then(|| network.mac_address().to_string()),
-                addresses: network
+            .map(|(name, network)| {
+                let mut addresses = network
                     .ip_networks()
                     .iter()
                     .map(|address| NetworkAddress {
                         address: address.addr.to_string(),
                         prefix_length: address.prefix,
                     })
-                    .collect(),
-                total_received_bytes: Some(network.total_received()),
-                total_transmitted_bytes: Some(network.total_transmitted()),
+                    .collect::<Vec<_>>();
+                addresses.sort_by(|left, right| {
+                    left.address
+                        .cmp(&right.address)
+                        .then(left.prefix_length.cmp(&right.prefix_length))
+                });
+
+                NetworkInterface {
+                    name: name.clone(),
+                    state: Some(network.operational_state().to_string()),
+                    mtu: non_zero(network.mtu()),
+                    mac_address: (!network.mac_address().is_unspecified())
+                        .then(|| network.mac_address().to_string()),
+                    addresses,
+                    total_received_bytes: Some(network.total_received()),
+                    total_transmitted_bytes: Some(network.total_transmitted()),
+                }
             })
             .collect::<Vec<_>>();
         interfaces.sort_by(|left, right| left.name.cmp(&right.name));
@@ -312,6 +326,9 @@ fn load_average() -> Option<LoadAverage> {
         return None;
     }
     let load = System::load_average();
+    if !load.one.is_finite() || !load.five.is_finite() || !load.fifteen.is_finite() {
+        return None;
+    }
     Some(LoadAverage {
         one_minute: load.one,
         five_minutes: load.five,
