@@ -9,14 +9,6 @@
 </p>
 
 <p align="center">
-  <code>CLI</code>
-  <code>diagnostics</code>
-  <code>cross-platform</code>
-  <code>read-only</code>
-  <code>Rust</code>
-</p>
-
-<p align="center">
   <a href="https://github.com/joshiii-xyz/syspeek/actions/workflows/ci.yml">
     <img src="https://github.com/joshiii-xyz/syspeek/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status" />
   </a>
