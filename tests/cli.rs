@@ -1,0 +1,73 @@
+use assert_cmd::Command;
+use predicates::prelude::*;
+use serde_json::Value;
+
+fn syspeek() -> Command {
+    Command::cargo_bin("syspeek").expect("binary should be built by Cargo")
+}
+
+#[test]
+fn help_describes_the_main_workflows() {
+    syspeek()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Inspect the current machine"))
+        .stdout(predicate::str::contains("processes"));
+}
+
+#[test]
+fn version_matches_package_metadata() {
+    syspeek().arg("--version").assert().success().stdout(predicate::str::contains("syspeek 0.1.0"));
+}
+
+#[test]
+fn default_json_is_valid_and_contains_the_full_snapshot() {
+    let output = syspeek().arg("--json").output().expect("command should run");
+    assert!(output.status.success());
+    let document: Value = serde_json::from_slice(&output.stdout).expect("stdout should be JSON");
+    assert_eq!(document["schemaVersion"], 1);
+    assert_eq!(document["scope"], "all");
+    assert!(document["system"].is_object());
+    assert!(document["cpu"].is_object());
+    assert!(document["memory"].is_object());
+    assert!(document["storage"].is_object());
+    assert!(document["network"].is_object());
+    assert!(document["processes"].is_object());
+}
+
+#[test]
+fn focused_commands_leave_unrequested_sections_null() {
+    let output = syspeek().args(["cpu", "--json"]).output().expect("command should run");
+    assert!(output.status.success());
+    let document: Value = serde_json::from_slice(&output.stdout).expect("stdout should be JSON");
+    assert_eq!(document["scope"], "cpu");
+    assert!(document["cpu"].is_object());
+    assert!(document["memory"].is_null());
+    assert!(document["storage"].is_null());
+    assert!(document["network"].is_null());
+    assert!(document["processes"].is_null());
+}
+
+#[test]
+fn process_limit_is_respected() {
+    let output = syspeek()
+        .args(["processes", "--limit", "2", "--sort", "memory", "--json"])
+        .output()
+        .expect("command should run");
+    assert!(output.status.success());
+    let document: Value = serde_json::from_slice(&output.stdout).expect("stdout should be JSON");
+    let processes =
+        document["processes"]["processes"].as_array().expect("process list should be an array");
+    assert!(processes.len() <= 2);
+}
+
+#[test]
+fn invalid_arguments_use_usage_exit_code() {
+    syspeek()
+        .args(["--interval", "10ms"])
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("watch interval"));
+}
