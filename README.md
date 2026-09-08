@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/joshiii-xyz/syspeek/actions/workflows/ci.yml">
-    <img src="https://github.com/joshiii-xyz/syspeek/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status" />
+  <a href="https://github.com/yoshiii-xyz/syspeek/actions/workflows/ci.yml">
+    <img src="https://github.com/yoshiii-xyz/syspeek/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status" />
   </a>
   <a href="https://www.rust-lang.org/">
     <img src="https://img.shields.io/badge/rust-1.95%2B-orange.svg" alt="Rust 1.95 or newer" />
